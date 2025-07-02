@@ -1,0 +1,88 @@
+# COROS <-> Garmin Activity Migration
+
+이 프로젝트는 COROS 계정과 Garmin Connect 계정 간 활동 데이터를 양방향으로 전송하는 Python 스크립트입니다.
+
+## 주요 기능
+
+- COROS → Garmin, Garmin → COROS 양방향 FIT 파일 연동
+- 각 서비스별 로그인 및 활동 데이터 조회
+- 활동 FIT 파일 병렬 다운로드/업로드
+- 날짜/월/전체/특정 파일/업로드만 등 다양한 옵션 제공
+- 다운로드 폴더 구조: `output_dir/coros`, `output_dir/garmin` (각 모듈이 하위 폴더 생성)
+- 옵션 미지정 시 전일자 데이터만 전송
+
+## 환경설정
+
+1. Python 3.8 이상 필요
+2. 필요한 패키지 설치:
+    ```bash
+    pip install requests garminconnect
+    ```
+3. `config.py` 파일에 계정 정보 및 출력 디렉토리 설정:
+    ```python
+    COROS_EMAIL     = "your_coros_email"
+    COROS_PASSWORD  = "your_coros_password"
+    GARMIN_USERNAME = "your_garmin_email"
+    GARMIN_PASSWORD = "your_garmin_password"
+    OUTPUT_DIR = "./output_dir"  # 원하는 경로로 지정
+    ```
+
+## 사용법
+
+터미널에서 아래와 같이 실행합니다.
+
+### 1. COROS → Garmin 연동
+- 특정 날짜 연동 (예: 20240701)
+    ```bash
+    python main.py --mode coros2garmin -d 20240701
+    ```
+- 특정 월 연동 (예: 202407)
+    ```bash
+    python main.py --mode coros2garmin -m 202407
+    ```
+- 전체 데이터 연동
+    ```bash
+    python main.py --mode coros2garmin -all
+    ```
+- 다운로드된 FIT 파일만 업로드
+    ```bash
+    python main.py --mode coros2garmin -u
+    ```
+- 특정 파일만 업로드
+    ```bash
+    python main.py --mode coros2garmin -f ./output_dir/coros/20241212_xxx.fit ./output_dir/coros/20250504_xxx.fit
+    ```
+
+### 2. Garmin → COROS 연동
+- 특정 날짜 연동 (예: 20240701)
+    ```bash
+    python main.py --mode garmin2coros -d 20240701
+    ```
+- 특정 월 연동 (예: 202407)
+    ```bash
+    python main.py --mode garmin2coros -m 202407
+    ```
+- 전체 데이터 연동
+    ```bash
+    python main.py --mode garmin2coros -all
+    ```
+- 다운로드된 FIT 파일만 업로드
+    ```bash
+    python main.py --mode garmin2coros -u
+    ```
+- 특정 파일만 업로드
+    ```bash
+    python main.py --mode garmin2coros -f ./output_dir/garmin/20241212_xxx.fit ./output_dir/garmin/20250504_xxx.fit
+    ```
+
+- 옵션 없이 실행 시, 전일자 데이터만 전송
+
+## 참고
+
+- COROS, Garmin API 정책에 따라 계정이 잠길 수 있으니 주의하세요.
+- 병렬 다운로드/업로드의 동시 처리 개수(`max_workers`)는 네트워크 상황에 맞게 조정하세요.
+- 업로드/다운로드 실패 시 에러 목록이 마지막에 출력됩니다.
+- 각 서비스별 다운로드 폴더(`output_dir/coros`, `output_dir/garmin`)를 구분해 사용하세요.
+
+---
+문의: [nightace7@live.co.kr]

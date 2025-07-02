@@ -1,0 +1,8 @@
+# config.py.example
+# 실제 사용 시 이 파일을 config.py로 복사하여 계정 정보를 입력하세요.
+
+COROS_EMAIL     = "your_coros_email"
+COROS_PASSWORD  = "your_coros_password"
+GARMIN_USERNAME = "your_garmin_email"
+GARMIN_PASSWORD = "your_garmin_password"
+OUTPUT_DIR = "./output_dir"  # 원하는 경로로 지정 (예: ./output_dir)
