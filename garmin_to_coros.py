@@ -1,3 +1,4 @@
+from enum import Enum, auto
 from config import COROS_EMAIL, COROS_PASSWORD, GARMIN_USERNAME, GARMIN_PASSWORD, OUTPUT_DIR
 import os
 import requests
@@ -66,13 +67,20 @@ def garmin_get_activities(garmin, start_date, end_date):
     return activities
 
 def download_garmin_fit(garmin, activity_id, output_dir):
+    ActivityDownloadFormat = Garmin.ActivityDownloadFormat  # 클래스 내부 Enum 참조
     filename = os.path.join(output_dir, f"{activity_id}.fit")
     if os.path.exists(filename):
+        print(f"{filename} 이미 존재")
         return filename
     try:
-        fit_data = garmin.download_activity(activity_id, dl_fmt="fit")
+        print(f"다운로드 시도: {activity_id}, 포맷: FIT")
+        fit_data = garmin.download_activity(activity_id, dl_fmt=ActivityDownloadFormat.ORIGINAL)
+        if not fit_data:
+            print(f"{activity_id} 다운로드 결과가 비어 있음")
+            return None
         with open(filename, "wb") as f:
             f.write(fit_data)
+        print(f"{filename} 저장 완료")
         return filename
     except Exception as e:
         print(f"{activity_id} 다운로드 실패: {e}")
@@ -95,83 +103,96 @@ class GarminToCoros:
             print(f"⛔ COROS 로그인 실패: {e}")
             return
 
-        # 업로드만 옵션
+        # 업로드만 옵션 (파일 직접 지정 또는 upload_only)
         if args.file:
             fit_files = args.file
             print(f"🚀 {len(fit_files)}개 FIT 파일을 선택 업로드합니다.")
-        elif args.upload_only:
+            self._upload_files(token, fit_files)
+            return
+        elif getattr(args, 'upload_only', False):
             fit_files = [
                 os.path.join(self.OUTPUT_DIR, f)
                 for f in os.listdir(self.OUTPUT_DIR)
                 if f.endswith(".fit")
             ]
             print(f"🚀 {len(fit_files)}개 FIT 파일을 COROS에 업로드합니다.")
-        else:
-            # 가민 로그인
+            self._upload_files(token, fit_files)
+            return
+        # 다운로드만 옵션
+        elif getattr(args, 'download_only', False):
             garmin = garmin_login(GARMIN_USERNAME, GARMIN_PASSWORD)
             if not garmin:
                 print("⛔ 가민 로그인 실패. 프로그램 종료.")
                 return
-
-            # 연동 옵션 처리
-            if args.day:
-                start_date = end_date = datetime.strptime(args.day, "%Y%m%d").date()
-                print(f"📅 일자 연동: {args.day}")
-            elif args.month:
-                year = int(args.month[:4])
-                month = int(args.month[4:6])
-                start_date = datetime(year, month, 1).date()
-                if month == 12:
-                    end_date = datetime(year + 1, 1, 1).date() - timedelta(days=1)
-                else:
-                    end_date = datetime(year, month + 1, 1).date() - timedelta(days=1)
-                print(f"🗓️ 월별 연동: {args.month}")
-            elif args.all:
-                # 전체 데이터: 2010년 1월 1일부터 오늘까지
-                start_date = datetime(2010, 1, 1).date()
-                end_date = datetime.now().date()
-                print("🌏 전체 데이터 연동")
-            else:
-                yesterday = (datetime.now() - timedelta(days=1)).date()
-                start_date = end_date = yesterday
-                print(f"⏰ 기본(어제) 연동: {yesterday.strftime('%Y%m%d')}")
-
-            # 활동 조회
-            activities = garmin_get_activities(garmin, start_date, end_date)
-            if not activities:
-                print("⚠️ 활동이 없습니다.")
+            fit_files = self._download_files(garmin, args)
+            return  # 여기서 반드시 return해서 업로드가 실행되지 않도록!
+        # 다운로드+업로드 (기본)
+        else:
+            garmin = garmin_login(GARMIN_USERNAME, GARMIN_PASSWORD)
+            if not garmin:
+                print("⛔ 가민 로그인 실패. 프로그램 종료.")
                 return
+            fit_files = self._download_files(garmin, args)
+            self._upload_files(token, fit_files)
 
-            print(f"🔍 샘플 활동 데이터: {activities[0]}")
-            print(f"🚀 총 {len(activities)}개 활동 다운로드 및 업로드 시작")
+    def _download_files(self, garmin, args):
+        # 연동 옵션 처리
+        if args.day:
+            start_date = end_date = datetime.strptime(args.day, "%Y%m%d").date()
+            print(f"📅 일자 연동: {args.day}")
+        elif args.month:
+            year = int(args.month[:4])
+            month = int(args.month[4:6])
+            start_date = datetime(year, month, 1).date()
+            if month == 12:
+                end_date = datetime(year + 1, 1, 1).date() - timedelta(days=1)
+            else:
+                end_date = datetime(year, month + 1, 1).date() - timedelta(days=1)
+            print(f"🗓️ 월별 연동: {args.month}")
+        elif args.all:
+            start_date = datetime(2010, 1, 1).date()
+            end_date = datetime.now().date()
+            print("🌏 전체 데이터 연동")
+        else:
+            yesterday = (datetime.now() - timedelta(days=1)).date()
+            start_date = end_date = yesterday
+            print(f"⏰ 기본(어제) 연동: {yesterday.strftime('%Y%m%d')}")
 
-            os.makedirs(self.OUTPUT_DIR, exist_ok=True)
+        activities = garmin_get_activities(garmin, start_date, end_date)
+        if not activities:
+            print("⚠️ 활동이 없습니다.")
+            return []
 
-            # 병렬 다운로드
-            fit_files = []
-            total = len(activities)
-            done = 0
-            print("⬇️ 다운로드 진행 중...")
-            with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
-                future_to_act = {
-                    executor.submit(
-                        download_garmin_fit,
-                        garmin,
-                        activity["activityId"],
-                        self.OUTPUT_DIR
-                    ): activity
-                    for activity in activities
-                }
-                for future in concurrent.futures.as_completed(future_to_act):
-                    fit_file = future.result()
-                    done += 1
-                    sys.stdout.write(f"\r⬇️ {done}/{total} 다운로드 완료")
-                    sys.stdout.flush()
-                    if fit_file:
-                        fit_files.append(fit_file)
-            print()  # 줄바꿈
+        print(f"🔍 샘플 활동 데이터: {activities[0]}")
+        print(f"🚀 총 {len(activities)}개 활동 다운로드 시작")
 
-        # 병렬 업로드
+        os.makedirs(self.OUTPUT_DIR, exist_ok=True)
+
+        fit_files = []
+        total = len(activities)
+        done = 0
+        print("⬇️ 다운로드 진행 중...")
+        with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+            future_to_act = {
+                executor.submit(
+                    download_garmin_fit,
+                    garmin,
+                    activity["activityId"],
+                    self.OUTPUT_DIR
+                ): activity
+                for activity in activities
+            }
+            for future in concurrent.futures.as_completed(future_to_act):
+                fit_file = future.result()
+                done += 1
+                sys.stdout.write(f"\r⬇️ {done}/{total} 다운로드 완료")
+                sys.stdout.flush()
+                if fit_file:
+                    fit_files.append(fit_file)
+        print()  # 줄바꿈
+        return fit_files
+
+    def _upload_files(self, token, fit_files):
         total = len(fit_files)
         done = 0
         error_list = []
@@ -188,7 +209,6 @@ class GarminToCoros:
                 sys.stdout.write(f"\r⬆️ {done}/{total} 업로드 완료 (에러 {error_count}건)")
                 sys.stdout.flush()
                 time.sleep(random.uniform(0.2, 0.5))  # 업로드 후 짧은 대기
-
         print("\n✅ 모든 작업 완료.")
         if error_list:
             print("\n❌ 업로드 에러 목록:")

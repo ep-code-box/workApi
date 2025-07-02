@@ -126,88 +126,112 @@ class CorosToGarmin:
             return (file_path, str(e))  # 실패
 
     def run(self, args):
-        # COROS 로그인 체크
-        if not args.upload_only and not args.file:
+        # COROS 로그인
+        token = None
+        if not getattr(args, 'upload_only', False) and not getattr(args, 'file', None):
             try:
                 token = coros_login(COROS_EMAIL, COROS_PASSWORD)
                 print("🔑 COROS 로그인 성공")
             except Exception as e:
                 print(f"⛔ COROS 로그인 실패: {e}")
                 return
-        else:
-            token = None
 
-        # 가민 로그인 체크
+        # 가민 로그인
         garmin = self.garmin_login(GARMIN_USERNAME, GARMIN_PASSWORD)
         if not garmin:
             print("⛔ 가민 로그인 실패. 프로그램 종료.")
             return
 
-        # 특정 파일만 업로드 옵션
-        if args.file:
+        # 업로드만 옵션 (파일 직접 지정 또는 upload_only)
+        if getattr(args, 'file', None):
             fit_files = args.file
             print(f"🚀 {len(fit_files)}개 FIT 파일을 선택 업로드합니다.")
-        elif args.upload_only:
-            # OUTPUT_DIR 내의 모든 .fit 파일을 업로드
+            self._upload_files(garmin, fit_files)
+            return
+        elif getattr(args, 'upload_only', False):
             fit_files = [
                 os.path.join(self.OUTPUT_DIR, f)
                 for f in os.listdir(self.OUTPUT_DIR)
                 if f.endswith(".fit")
             ]
             print(f"🚀 {len(fit_files)}개 FIT 파일을 가민에 업로드합니다.")
+            self._upload_files(garmin, fit_files)
+            return
+        # 다운로드만 옵션
+        elif getattr(args, 'download_only', False):
+            if not token:
+                try:
+                    token = coros_login(COROS_EMAIL, COROS_PASSWORD)
+                    print("🔑 COROS 로그인 성공")
+                except Exception as e:
+                    print(f"⛔ COROS 로그인 실패: {e}")
+                    return
+            fit_files = self._download_files(token, args)
+            return  # 여기서 반드시 return해서 업로드가 실행되지 않도록!
+        # 다운로드+업로드 (기본)
         else:
-            # 연동 옵션 처리
-            if args.day:
-                print(f"📅 일자 연동: {args.day}")
-                activities = coros_get_activities(token, args.day, args.day)
-            elif args.month:
-                print(f"🗓️ 월별 연동: {args.month}")
-                activities = coros_get_month_activities(token, args.month)
-            elif args.all:
-                print("🌏 전체 데이터 연동")
-                activities = coros_get_all_activities(token)
-                print(f"📦 전체 활동 개수: {len(activities)}")
-            else:
-                yesterday = (datetime.now() - timedelta(days=1)).strftime("%Y%m%d")
-                print(f"⏰ 기본(어제) 연동: {yesterday}")
-                activities = coros_get_activities(token, yesterday, yesterday)
+            if not token:
+                try:
+                    token = coros_login(COROS_EMAIL, COROS_PASSWORD)
+                    print("🔑 COROS 로그인 성공")
+                except Exception as e:
+                    print(f"⛔ COROS 로그인 실패: {e}")
+                    return
+            fit_files = self._download_files(token, args)
+            self._upload_files(garmin, fit_files)
 
-            if not activities:
-                print("⚠️ 활동이 없습니다.")
-                return
+    def _download_files(self, token, args):
+        if args.day:
+            print(f"📅 일자 연동: {args.day}")
+            activities = coros_get_activities(token, args.day, args.day)
+        elif args.month:
+            print(f"🗓️ 월별 연동: {args.month}")
+            activities = coros_get_month_activities(token, args.month)
+        elif args.all:
+            print("🌏 전체 데이터 연동")
+            activities = coros_get_all_activities(token)
+            print(f"📦 전체 활동 개수: {len(activities)}")
+        else:
+            yesterday = (datetime.now() - timedelta(days=1)).strftime("%Y%m%d")
+            print(f"⏰ 기본(어제) 연동: {yesterday}")
+            activities = coros_get_activities(token, yesterday, yesterday)
 
-            print(f"🔍 샘플 활동 데이터: {activities[0]}")
-            print(f"🚀 총 {len(activities)}개 활동 다운로드 및 업로드 시작")
+        if not activities:
+            print("⚠️ 활동이 없습니다.")
+            return []
 
-            os.makedirs(self.OUTPUT_DIR, exist_ok=True)
+        print(f"🔍 샘플 활동 데이터: {activities[0]}")
+        print(f"🚀 총 {len(activities)}개 활동 다운로드 시작")
 
-            # 병렬 다운로드
-            fit_files = []
-            total = len(activities)
-            done = 0
-            print("⬇️ 다운로드 진행 중...")
-            with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
-                future_to_activity = {
-                    executor.submit(
-                        coros_download_fit,
-                        token,
-                        activity["labelId"],
-                        activity["sportType"],
-                        activity["date"],
-                        self.OUTPUT_DIR
-                    ): activity
-                    for activity in activities
-                }
-                for future in concurrent.futures.as_completed(future_to_activity):
-                    fit_file = future.result()
-                    done += 1
-                    sys.stdout.write(f"\r⬇️ {done}/{total} 다운로드 완료")
-                    sys.stdout.flush()
-                    if fit_file:
-                        fit_files.append(fit_file)
-            print()  # 줄바꿈
+        os.makedirs(self.OUTPUT_DIR, exist_ok=True)
 
-        # 병렬 업로드
+        fit_files = []
+        total = len(activities)
+        done = 0
+        print("⬇️ 다운로드 진행 중...")
+        with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+            future_to_activity = {
+                executor.submit(
+                    coros_download_fit,
+                    token,
+                    activity["labelId"],
+                    activity["sportType"],
+                    activity["date"],
+                    self.OUTPUT_DIR
+                ): activity
+                for activity in activities
+            }
+            for future in concurrent.futures.as_completed(future_to_activity):
+                fit_file = future.result()
+                done += 1
+                sys.stdout.write(f"\r⬇️ {done}/{total} 다운로드 완료")
+                sys.stdout.flush()
+                if fit_file:
+                    fit_files.append(fit_file)
+        print()  # 줄바꿈
+        return fit_files
+
+    def _upload_files(self, garmin, fit_files):
         total = len(fit_files)
         done = 0
         error_list = []
@@ -223,7 +247,6 @@ class CorosToGarmin:
                     error_list.append(f"{file_path} | 사유: {error}")
                 sys.stdout.write(f"\r⬆️ {done}/{total} 업로드 완료 (에러 {error_count}건)")
                 sys.stdout.flush()
-
         print("\n✅ 모든 작업 완료.")
         if error_list:
             print("\n❌ 업로드 에러 목록:")
