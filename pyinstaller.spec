@@ -16,8 +16,6 @@ datas = [
     ('config.py', '.'),
     ('config.py.example', '.'),
     ('README.md', '.'),
-    ('exports/coros', 'exports/coros'),
-    ('exports/garmin', 'exports/garmin'),
 ]
 
 # 경로 처리: 실행파일/스크립트 위치 기준으로 상대경로 처리

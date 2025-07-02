@@ -4,3 +4,11 @@
 /test.py
 config.py.bak
 .DS_Store
+# PyInstaller 빌드 산출물 무시
+/dist/
+/build/
+/*.spec
+/*.bak
+*.log
+*.tmp
+build_clean_and_build.sh
