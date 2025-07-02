@@ -74,70 +74,89 @@ class ConfigDialog(tk.Toplevel):
 class SyncGUI:
     def __init__(self, root):
         self.root = root
-        self.root.title("COROS <-> Garmin 연동 GUI")
+        self.root.title("COROS ↔ Garmin 연동 도구 (모던 GUI)")
         self.mode = tk.StringVar(value="coros2garmin")
         self.date_type = tk.StringVar(value="day")
         self.selected_date = tk.StringVar()
         self.selected_month = tk.StringVar()
         self.file_list = []
         self.log_text = tk.StringVar()
+        self.action_mode = tk.StringVar(value="download")
         self.config_path = resource_path("config.py")
-        # config.py가 없으면 안내 메시지
         if not os.path.exists(self.config_path):
             tk.messagebox.showinfo("설정 필요", "최초 실행 시 [설정(config)] 버튼을 눌러 계정 정보를 입력하세요.")
         self.create_widgets()
 
     def create_widgets(self):
-        frm = ttk.Frame(self.root, padding=10)
+        frm = ttk.Frame(self.root, padding=20)
         frm.pack(fill=tk.BOTH, expand=True)
 
+        # 타이틀
+        title = ttk.Label(frm, text="COROS ↔ Garmin Activity Sync", font=("Segoe UI", 18, "bold"), foreground="#2c3e50")
+        title.grid(row=0, column=0, columnspan=5, pady=(0, 10))
+        # 구분선
+        ttk.Separator(frm, orient="horizontal").grid(row=1, column=0, columnspan=5, sticky="ew", pady=5)
+
         # 모드 선택
-        ttk.Label(frm, text="모드 선택:").grid(row=0, column=0, sticky="w")
-        ttk.Radiobutton(frm, text="COROS → Garmin", variable=self.mode, value="coros2garmin").grid(row=0, column=1, sticky="w")
-        ttk.Radiobutton(frm, text="Garmin → COROS", variable=self.mode, value="garmin2coros").grid(row=0, column=2, sticky="w")
+        ttk.Label(frm, text="모드 선택:", font=("Segoe UI", 11, "bold")).grid(row=2, column=0, sticky="e", pady=2)
+        ttk.Radiobutton(frm, text="COROS → Garmin", variable=self.mode, value="coros2garmin").grid(row=2, column=1, sticky="w")
+        ttk.Radiobutton(frm, text="Garmin → COROS", variable=self.mode, value="garmin2coros").grid(row=2, column=2, sticky="w")
 
         # 날짜/월/전체 선택
-        ttk.Label(frm, text="연동 범위:").grid(row=1, column=0, sticky="w")
-        ttk.Radiobutton(frm, text="날짜", variable=self.date_type, value="day", command=self.update_date_widgets).grid(row=1, column=1, sticky="w")
-        ttk.Radiobutton(frm, text="월", variable=self.date_type, value="month", command=self.update_date_widgets).grid(row=1, column=2, sticky="w")
-        ttk.Radiobutton(frm, text="전체", variable=self.date_type, value="all", command=self.update_date_widgets).grid(row=1, column=3, sticky="w")
+        ttk.Label(frm, text="연동 범위:", font=("Segoe UI", 11, "bold")).grid(row=3, column=0, sticky="e", pady=2)
+        ttk.Radiobutton(frm, text="날짜", variable=self.date_type, value="day", command=self.update_date_widgets).grid(row=3, column=1, sticky="w")
+        ttk.Radiobutton(frm, text="월", variable=self.date_type, value="month", command=self.update_date_widgets).grid(row=3, column=2, sticky="w")
+        ttk.Radiobutton(frm, text="전체", variable=self.date_type, value="all", command=self.update_date_widgets).grid(row=3, column=3, sticky="w")
 
-        # 날짜 선택 위젯 (ttkbootstrap DateEntry)
+        # 날짜 선택 위젯
         self.date_entry = DateEntry(frm, width=12, bootstyle="info")
-        self.date_entry.grid(row=2, column=1, sticky="w")
-        # DateEntry는 get() 대신 entry.get() 사용, 날짜 선택 시 selected_date에 값 저장
+        self.date_entry.grid(row=4, column=1, sticky="w", pady=2)
         def update_selected_date(event=None):
             self.selected_date.set(self.date_entry.entry.get())
         self.date_entry.entry.bind('<FocusOut>', update_selected_date)
         self.date_entry.entry.bind('<Return>', update_selected_date)
         self.date_entry.entry.bind('<Tab>', update_selected_date)
         self.date_entry.entry.bind('<Button-1>', update_selected_date)
-        # DateEntry 달력에서 날짜 선택 시에도 동기화
         self.date_entry.bind('<<DateEntrySelected>>', update_selected_date)
-        # 월 선택 위젯
         self.month_entry = ttk.Combobox(frm, width=7, textvariable=self.selected_month, values=self.get_month_list())
-        self.month_entry.grid(row=2, column=2, sticky="w")
+        self.month_entry.grid(row=4, column=2, sticky="w", pady=2)
         self.update_date_widgets()
 
         # 파일 선택
-        ttk.Button(frm, text="특정 FIT 파일 선택", command=self.select_files).grid(row=3, column=0, sticky="w")
-        self.file_label = ttk.Label(frm, text="(선택 안함)")
-        self.file_label.grid(row=3, column=1, columnspan=3, sticky="w")
+        ttk.Button(frm, text="특정 FIT 파일 선택", bootstyle="secondary-outline", command=self.select_files).grid(row=5, column=0, sticky="e", pady=2)
+        self.file_label = ttk.Label(frm, text="(선택 안함)", foreground="#888")
+        self.file_label.grid(row=5, column=1, columnspan=3, sticky="w")
 
         # 실행 모드 선택
-        self.action_mode = tk.StringVar(value="download")
-        ttk.Label(frm, text="실행 모드:").grid(row=4, column=0, sticky="w")
-        ttk.Radiobutton(frm, text="다운로드만", variable=self.action_mode, value="download").grid(row=4, column=1, sticky="w")
-        ttk.Radiobutton(frm, text="업로드만", variable=self.action_mode, value="upload").grid(row=4, column=2, sticky="w")
-        ttk.Radiobutton(frm, text="다운로드+업로드", variable=self.action_mode, value="both").grid(row=4, column=3, sticky="w")
+        ttk.Label(frm, text="실행 모드:", font=("Segoe UI", 11, "bold")).grid(row=6, column=0, sticky="e", pady=2)
+        ttk.Radiobutton(frm, text="다운로드만", variable=self.action_mode, value="download").grid(row=6, column=1, sticky="w")
+        ttk.Radiobutton(frm, text="업로드만", variable=self.action_mode, value="upload").grid(row=6, column=2, sticky="w")
+        ttk.Radiobutton(frm, text="다운로드+업로드", variable=self.action_mode, value="both").grid(row=6, column=3, sticky="w")
 
-        # 실행 버튼
-        ttk.Button(frm, text="실행", command=self.run_action).grid(row=5, column=0, pady=10)
-        # 로그 출력
-        self.log_box = tk.Text(frm, height=12, width=70, state="disabled")
-        self.log_box.grid(row=6, column=0, columnspan=4, pady=10)
-        # 상단에 [설정] 버튼 추가
-        ttk.Button(frm, text="설정(config)", command=self.open_config_dialog).grid(row=0, column=4, padx=10)
+        # 실행 버튼 (강조)
+        ttk.Button(frm, text="실행", bootstyle="success", width=12, command=self.run_action).grid(row=7, column=0, pady=15)
+        # 상단에 [설정] 버튼 (오른쪽 상단)
+        ttk.Button(frm, text="설정(config)", bootstyle="info-outline", command=self.open_config_dialog).grid(row=0, column=4, padx=10, sticky="e")
+
+        # 로그 출력 (더 넓고, 폰트/배경 강조)
+        log_frame = ttk.Frame(frm, borderwidth=1, relief="solid")
+        log_frame.grid(row=8, column=0, columnspan=5, pady=(10, 0), sticky="ew")
+        self.log_box = tk.Text(log_frame, height=14, width=80, state="disabled", font=("Consolas", 11), bg="#f8f9fa", fg="#222")
+        self.log_box.pack(fill=tk.BOTH, expand=True, padx=4, pady=4)
+
+    def append_log(self, msg, tag=None):
+        self.log_box.config(state="normal")
+        if tag == "error":
+            self.log_box.insert(tk.END, msg + "\n", "error")
+        elif tag == "success":
+            self.log_box.insert(tk.END, msg + "\n", "success")
+        else:
+            self.log_box.insert(tk.END, msg + "\n")
+        self.log_box.see(tk.END)
+        self.log_box.config(state="disabled")
+        # 스타일 태그
+        self.log_box.tag_config("error", foreground="#c0392b", font=("Consolas", 11, "bold"))
+        self.log_box.tag_config("success", foreground="#27ae60", font=("Consolas", 11, "bold"))
 
     def update_date_widgets(self):
         if self.date_type.get() == "day":
@@ -167,51 +186,61 @@ class SyncGUI:
 
     def run_action(self):
         mode = self.action_mode.get()
+        self.log_box.config(state="normal"); self.log_box.delete(1.0, tk.END); self.log_box.config(state="disabled")
         if mode == "download":
             args = self.build_args(download_only=True)
             args.download_only = True
-            self.log_box.config(state="normal"); self.log_box.delete(1.0, tk.END)
-            self.log_box.insert(tk.END, "[다운로드 시작]\n"); self.log_box.config(state="disabled")
+            self.append_log("[다운로드 시작]", tag="success")
             threading.Thread(target=self._run_download, args=(args,)).start()
         elif mode == "upload":
             args = self.build_args(upload_only=True)
             args.upload_only = True
-            self.log_box.config(state="normal"); self.log_box.delete(1.0, tk.END)
-            self.log_box.insert(tk.END, "[업로드 시작]\n"); self.log_box.config(state="disabled")
+            self.append_log("[업로드 시작]", tag="success")
             threading.Thread(target=self._run_upload, args=(args,)).start()
         else:  # both
             args = self.build_args()
-            self.log_box.config(state="normal"); self.log_box.delete(1.0, tk.END)
-            self.log_box.insert(tk.END, "[다운로드+업로드 시작]\n"); self.log_box.config(state="disabled")
+            self.append_log("[다운로드+업로드 시작]", tag="success")
             threading.Thread(target=self._run_both, args=(args,)).start()
 
     def _run_download(self, args):
         self.append_log("[다운로드 진행 중...]")
-        if args.mode == "coros2garmin":
-            CorosToGarmin().run(args)
-        else:
-            GarminToCoros().run(args)
-        self.append_log("[다운로드 완료]")
+        try:
+            if args.mode == "coros2garmin":
+                CorosToGarmin().run(args)
+            else:
+                GarminToCoros().run(args)
+            self.append_log("[다운로드 완료]", tag="success")
+        except Exception as e:
+            self.append_log(f"[다운로드 오류] {e}", tag="error")
 
     def _run_upload(self, args):
         self.append_log("[업로드 진행 중...]")
-        # 업로드만 옵션 활성화
         args.upload_only = True
-        if args.mode == "coros2garmin":
-            CorosToGarmin().run(args)
-        else:
-            GarminToCoros().run(args)
-        self.append_log("[업로드 완료]")
+        try:
+            if args.mode == "coros2garmin":
+                CorosToGarmin().run(args)
+            else:
+                GarminToCoros().run(args)
+            self.append_log("[업로드 완료]", tag="success")
+        except Exception as e:
+            self.append_log(f"[업로드 오류] {e}", tag="error")
 
     def _run_both(self, args):
         self.append_log("[다운로드+업로드 진행 중...]")
-        if args.mode == "coros2garmin":
-            CorosToGarmin().run(args)
-            GarminToCoros().run(args)
-        else:
-            GarminToCoros().run(args)
-            CorosToGarmin().run(args)
-        self.append_log("[다운로드+업로드 완료]")
+        try:
+            if args.mode == "coros2garmin":
+                CorosToGarmin().run(args)
+                self.append_log("[COROS→Garmin 완료]", tag="success")
+                GarminToCoros().run(args)
+                self.append_log("[Garmin→COROS 완료]", tag="success")
+            else:
+                GarminToCoros().run(args)
+                self.append_log("[Garmin→COROS 완료]", tag="success")
+                CorosToGarmin().run(args)
+                self.append_log("[COROS→Garmin 완료]", tag="success")
+            self.append_log("[다운로드+업로드 전체 완료]", tag="success")
+        except Exception as e:
+            self.append_log(f"[다운로드+업로드 오류] {e}", tag="error")
 
     def build_args(self, download_only=False, upload_only=False):
         class Args: pass
