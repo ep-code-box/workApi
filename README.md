@@ -19,7 +19,7 @@
     ```bash
     pip install requests garminconnect
     ```
-3. **`config.py` 파일에 계정 정보 및 출력 디렉토리 설정**
+3. **[config.py](http://_vscodecontentref_/0) 파일에 계정 정보 및 출력 디렉토리 설정**
 
     ```python
     COROS_EMAIL     = "your_coros_email"
