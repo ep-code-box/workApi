@@ -1,4 +1,4 @@
-from config import COROS_EMAIL, COROS_PASSWORD, GARMIN_USERNAME, GARMIN_PASSWORD, OUTPUT_DIR
+from config import load_config
 
 import os
 import requests
@@ -102,8 +102,12 @@ def coros_download_fit(token, label_id, sport_type, date_label, output_dir):
 # 클래스화
 class CorosToGarmin:
     def __init__(self, output_dir=None):
-        # output_dir이 주어지면 사용, 아니면 config의 OUTPUT_DIR
-        self.ROOT_DIR = output_dir if output_dir else OUTPUT_DIR
+        self.config = load_config()
+        self.COROS_EMAIL = self.config.get('COROS_EMAIL', '')
+        self.COROS_PASSWORD = self.config.get('COROS_PASSWORD', '')
+        self.GARMIN_USERNAME = self.config.get('GARMIN_USERNAME', '')
+        self.GARMIN_PASSWORD = self.config.get('GARMIN_PASSWORD', '')
+        self.ROOT_DIR = output_dir if output_dir else self.config.get('OUTPUT_DIR', './exports')
         self.OUTPUT_DIR = os.path.join(self.ROOT_DIR, "coros")
 
     def garmin_login(self, username, password):
@@ -130,14 +134,14 @@ class CorosToGarmin:
         token = None
         if not getattr(args, 'upload_only', False) and not getattr(args, 'file', None):
             try:
-                token = coros_login(COROS_EMAIL, COROS_PASSWORD)
+                token = coros_login(self.COROS_EMAIL, self.COROS_PASSWORD)
                 print("🔑 COROS 로그인 성공")
             except Exception as e:
                 print(f"⛔ COROS 로그인 실패: {e}")
                 return
 
         # 가민 로그인
-        garmin = self.garmin_login(GARMIN_USERNAME, GARMIN_PASSWORD)
+        garmin = self.garmin_login(self.GARMIN_USERNAME, self.GARMIN_PASSWORD)
         if not garmin:
             print("⛔ 가민 로그인 실패. 프로그램 종료.")
             return
@@ -161,7 +165,7 @@ class CorosToGarmin:
         elif getattr(args, 'download_only', False):
             if not token:
                 try:
-                    token = coros_login(COROS_EMAIL, COROS_PASSWORD)
+                    token = coros_login(self.COROS_EMAIL, self.COROS_PASSWORD)
                     print("🔑 COROS 로그인 성공")
                 except Exception as e:
                     print(f"⛔ COROS 로그인 실패: {e}")
@@ -172,7 +176,7 @@ class CorosToGarmin:
         else:
             if not token:
                 try:
-                    token = coros_login(COROS_EMAIL, COROS_PASSWORD)
+                    token = coros_login(self.COROS_EMAIL, self.COROS_PASSWORD)
                     print("🔑 COROS 로그인 성공")
                 except Exception as e:
                     print(f"⛔ COROS 로그인 실패: {e}")

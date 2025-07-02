@@ -1,8 +1,28 @@
 # config.py.example
 # 실제 사용 시 이 파일을 config.py로 복사하여 계정 정보를 입력하세요.
 
-COROS_EMAIL     = "your_coros_email"
-COROS_PASSWORD  = "your_coros_password"
-GARMIN_USERNAME = "your_garmin_email"
-GARMIN_PASSWORD = "your_garmin_password"
-OUTPUT_DIR = "./output_dir"  # 원하는 경로로 지정 (예: ./output_dir)
+COROS_EMAIL     = ""
+COROS_PASSWORD  = ""
+GARMIN_USERNAME = ""
+GARMIN_PASSWORD = ""
+OUTPUT_DIR = "./exports"
+
+def load_config(config_path="config.py"):
+    import re, os
+    config = {}
+    if not os.path.exists(config_path):
+        return config
+    with open(config_path, encoding="utf-8") as f:
+        text = f.read()
+    def get_val(key):
+        m = re.search(rf'{key}\s*=\s*["\"](.*?)["\"]', text)
+        return m.group(1) if m else ""
+    def get_val_dir(key):
+        m = re.search(rf'{key}\s*=\s*["\']?(.*?)["\']?$', text, re.MULTILINE)
+        return m.group(1) if m else ""
+    config['COROS_EMAIL'] = get_val('COROS_EMAIL')
+    config['COROS_PASSWORD'] = get_val('COROS_PASSWORD')
+    config['GARMIN_USERNAME'] = get_val('GARMIN_USERNAME')
+    config['GARMIN_PASSWORD'] = get_val('GARMIN_PASSWORD')
+    config['OUTPUT_DIR'] = get_val_dir('OUTPUT_DIR')
+    return config

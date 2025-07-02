@@ -1,4 +1,3 @@
-
 # COROS <-> Garmin Activity Migration
 
 이 프로젝트는 COROS 계정과 Garmin Connect 계정 간 활동 데이터를 양방향으로 전송하는 Python 스크립트입니다.
@@ -119,6 +118,33 @@ python main.py --mode coros2garmin --file exports/coros/20240601_123456.fit --up
     - 날짜 선택은 modern 달력(DateEntry) 위젯 사용, macOS에서도 안정적
     - 파일명: COROS/가민 모두 `YYYYMMDD_activityId.fit` 형식으로 저장
     - 로그/진행상황 실시간 표시
+
+## 실행 파일(배포용) 만들기
+
+- PyInstaller로 단일 실행 파일(EXE, macOS app 등) 생성 가능
+- spec 파일 예시: `pyinstaller.spec` 제공
+- 빌드 명령:
+  ```bash
+  pip install pyinstaller
+  pyinstaller pyinstaller.spec
+  ```
+- 빌드 후 `dist/coros_garmin_gui`(또는 .exe) 실행
+- **경로 처리:**
+  - 코드에서 파일/폴더 접근 시 반드시 아래 함수로 경로 처리:
+    ```python
+    import os, sys
+    def resource_path(relative_path):
+        try:
+            base_path = sys._MEIPASS
+        except Exception:
+            base_path = os.path.abspath(os.path.dirname(__file__))
+        return os.path.join(base_path, relative_path)
+    # 예시: OUTPUT_DIR = resource_path('exports')
+    ```
+  - config.py, exports/ 등은 실행파일과 같은 폴더에 두는 것을 권장
+- macOS: app 번들로 만들려면 py2app 등도 활용 가능
+- 빌드 후 첫 실행은 느릴 수 있음(압축 해제 때문)
+- 자세한 옵션은 PyInstaller 공식문서 참고
 
 ---
 

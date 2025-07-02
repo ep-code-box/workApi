@@ -1,5 +1,4 @@
 from enum import Enum, auto
-from config import COROS_EMAIL, COROS_PASSWORD, GARMIN_USERNAME, GARMIN_PASSWORD, OUTPUT_DIR
 import os
 import requests
 import argparse
@@ -10,6 +9,7 @@ import sys
 import time
 import random
 from garminconnect import Garmin
+from config import load_config
 
 def coros_login(email, password):
     md5_pwd = hashlib.md5(password.encode('utf-8')).hexdigest()
@@ -100,14 +100,18 @@ def download_garmin_fit(garmin, activity, output_dir):
 # 클래스화
 class GarminToCoros:
     def __init__(self, output_dir=None):
-        # output_dir이 주어지면 사용, 아니면 config의 OUTPUT_DIR
-        self.ROOT_DIR = output_dir if output_dir else OUTPUT_DIR
+        self.config = load_config()
+        self.COROS_EMAIL = self.config.get('COROS_EMAIL', '')
+        self.COROS_PASSWORD = self.config.get('COROS_PASSWORD', '')
+        self.GARMIN_USERNAME = self.config.get('GARMIN_USERNAME', '')
+        self.GARMIN_PASSWORD = self.config.get('GARMIN_PASSWORD', '')
+        self.ROOT_DIR = output_dir if output_dir else self.config.get('OUTPUT_DIR', './exports')
         self.OUTPUT_DIR = os.path.join(self.ROOT_DIR, "garmin")
 
     def run(self, args):
         # COROS 로그인
         try:
-            token = coros_login(COROS_EMAIL, COROS_PASSWORD)
+            token = coros_login(self.COROS_EMAIL, self.COROS_PASSWORD)
             print("🔑 COROS 로그인 성공")
         except Exception as e:
             print(f"⛔ COROS 로그인 실패: {e}")
@@ -130,7 +134,7 @@ class GarminToCoros:
             return
         # 다운로드만 옵션
         elif getattr(args, 'download_only', False):
-            garmin = garmin_login(GARMIN_USERNAME, GARMIN_PASSWORD)
+            garmin = garmin_login(self.GARMIN_USERNAME, self.GARMIN_PASSWORD)
             if not garmin:
                 print("⛔ 가민 로그인 실패. 프로그램 종료.")
                 return
@@ -138,7 +142,7 @@ class GarminToCoros:
             return  # 여기서 반드시 return해서 업로드가 실행되지 않도록!
         # 다운로드+업로드 (기본)
         else:
-            garmin = garmin_login(GARMIN_USERNAME, GARMIN_PASSWORD)
+            garmin = garmin_login(self.GARMIN_USERNAME, self.GARMIN_PASSWORD)
             if not garmin:
                 print("⛔ 가민 로그인 실패. 프로그램 종료.")
                 return

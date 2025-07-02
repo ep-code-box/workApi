@@ -4,6 +4,72 @@ from ttkbootstrap.widgets import DateEntry
 from coros_to_garmin import CorosToGarmin
 from garmin_to_coros import GarminToCoros
 import threading
+import os
+import sys
+
+# PyInstaller/로컬 환경 모두에서 동작하는 경로 반환 함수
+def resource_path(relative_path):
+    try:
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.abspath(os.path.dirname(__file__))
+    return os.path.join(base_path, relative_path)
+
+class ConfigDialog(tk.Toplevel):
+    def __init__(self, master, config_path):
+        super().__init__(master)
+        self.title("설정 (config.py)")
+        self.config_path = config_path
+        self.resizable(False, False)
+        # 필드
+        self.coros_email = tk.StringVar()
+        self.coros_password = tk.StringVar()
+        self.garmin_username = tk.StringVar()
+        self.garmin_password = tk.StringVar()
+        self.output_dir = tk.StringVar()
+        self._load_config()
+        # UI
+        frm = ttk.Frame(self, padding=10)
+        frm.pack(fill=tk.BOTH, expand=True)
+        ttk.Label(frm, text="COROS 이메일:").grid(row=0, column=0, sticky="e"); ttk.Entry(frm, textvariable=self.coros_email, width=30).grid(row=0, column=1)
+        ttk.Label(frm, text="COROS 비밀번호:").grid(row=1, column=0, sticky="e"); ttk.Entry(frm, textvariable=self.coros_password, show="*", width=30).grid(row=1, column=1)
+        ttk.Label(frm, text="Garmin 이메일:").grid(row=2, column=0, sticky="e"); ttk.Entry(frm, textvariable=self.garmin_username, width=30).grid(row=2, column=1)
+        ttk.Label(frm, text="Garmin 비밀번호:").grid(row=3, column=0, sticky="e"); ttk.Entry(frm, textvariable=self.garmin_password, show="*", width=30).grid(row=3, column=1)
+        ttk.Label(frm, text="출력 폴더:").grid(row=4, column=0, sticky="e"); ttk.Entry(frm, textvariable=self.output_dir, width=30).grid(row=4, column=1)
+        ttk.Button(frm, text="저장", command=self.save).grid(row=5, column=0, pady=10)
+        ttk.Button(frm, text="닫기", command=self.destroy).grid(row=5, column=1, pady=10)
+    def _load_config(self):
+        import re
+        # config.py가 없으면 기본값으로 초기화
+        if not os.path.exists(self.config_path):
+            self.coros_email.set("")
+            self.coros_password.set("")
+            self.garmin_username.set("")
+            self.garmin_password.set("")
+            self.output_dir.set("./exports")
+            return
+        with open(self.config_path, encoding="utf-8") as f:
+            text = f.read()
+        def get_val(key):
+            m = re.search(rf'{key}\s*=\s*["\"](.*?)["\"]', text)
+            return m.group(1) if m else ""
+        def get_val_dir(key):
+            m = re.search(rf'{key}\s*=\s*["\']?(.*?)["\']?$', text, re.MULTILINE)
+            return m.group(1) if m else ""
+        self.coros_email.set(get_val('COROS_EMAIL'))
+        self.coros_password.set(get_val('COROS_PASSWORD'))
+        self.garmin_username.set(get_val('GARMIN_USERNAME'))
+        self.garmin_password.set(get_val('GARMIN_PASSWORD'))
+        self.output_dir.set(get_val_dir('OUTPUT_DIR'))
+    def save(self):
+        # config.py가 없으면 새로 생성
+        with open(self.config_path, "w", encoding="utf-8") as f:
+            f.write(f'COROS_EMAIL     = "{self.coros_email.get()}"\n')
+            f.write(f'COROS_PASSWORD  = "{self.coros_password.get()}"\n')
+            f.write(f'GARMIN_USERNAME = "{self.garmin_username.get()}"\n')
+            f.write(f'GARMIN_PASSWORD = "{self.garmin_password.get()}"\n')
+            f.write(f'OUTPUT_DIR = "{self.output_dir.get()}"\n')
+        tk.messagebox.showinfo("저장 완료", "설정이 저장되었습니다.")
 
 class SyncGUI:
     def __init__(self, root):
@@ -15,6 +81,10 @@ class SyncGUI:
         self.selected_month = tk.StringVar()
         self.file_list = []
         self.log_text = tk.StringVar()
+        self.config_path = resource_path("config.py")
+        # config.py가 없으면 안내 메시지
+        if not os.path.exists(self.config_path):
+            tk.messagebox.showinfo("설정 필요", "최초 실행 시 [설정(config)] 버튼을 눌러 계정 정보를 입력하세요.")
         self.create_widgets()
 
     def create_widgets(self):
@@ -66,6 +136,8 @@ class SyncGUI:
         # 로그 출력
         self.log_box = tk.Text(frm, height=12, width=70, state="disabled")
         self.log_box.grid(row=6, column=0, columnspan=4, pady=10)
+        # 상단에 [설정] 버튼 추가
+        ttk.Button(frm, text="설정(config)", command=self.open_config_dialog).grid(row=0, column=4, padx=10)
 
     def update_date_widgets(self):
         if self.date_type.get() == "day":
@@ -177,6 +249,9 @@ class SyncGUI:
             self.date_entry.after(100, lambda: self.date_entry.event_generate('<Down>'))
         except Exception:
             pass
+
+    def open_config_dialog(self):
+        ConfigDialog(self.root, self.config_path)
 
 if __name__ == "__main__":
     import ttkbootstrap as tb
