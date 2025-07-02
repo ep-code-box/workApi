@@ -66,9 +66,19 @@ def garmin_get_activities(garmin, start_date, end_date):
         print(f"가민 활동 조회 실패: {e}")
     return activities
 
-def download_garmin_fit(garmin, activity_id, output_dir):
-    ActivityDownloadFormat = Garmin.ActivityDownloadFormat  # 클래스 내부 Enum 참조
-    filename = os.path.join(output_dir, f"{activity_id}.fit")
+def download_garmin_fit(garmin, activity, output_dir):
+    ActivityDownloadFormat = Garmin.ActivityDownloadFormat
+    # 코로스와 유사하게 날짜+id로 파일명 생성
+    date_label = None
+    if "startTimeLocal" in activity:
+        # 예: 2025-07-02 08:00:00
+        date_label = activity["startTimeLocal"].split(" ")[0].replace("-", "")
+    elif "startTime" in activity:
+        date_label = activity["startTime"].split(" ")[0].replace("-", "")
+    else:
+        date_label = "nodate"
+    activity_id = activity["activityId"]
+    filename = os.path.join(output_dir, f"{date_label}_{activity_id}.fit")
     if os.path.exists(filename):
         print(f"{filename} 이미 존재")
         return filename
@@ -177,7 +187,7 @@ class GarminToCoros:
                 executor.submit(
                     download_garmin_fit,
                     garmin,
-                    activity["activityId"],
+                    activity,
                     self.OUTPUT_DIR
                 ): activity
                 for activity in activities

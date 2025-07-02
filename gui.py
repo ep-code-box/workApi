@@ -1,6 +1,6 @@
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
-from tkcalendar import DateEntry
+from ttkbootstrap.widgets import DateEntry
 from coros_to_garmin import CorosToGarmin
 from garmin_to_coros import GarminToCoros
 import threading
@@ -32,17 +32,18 @@ class SyncGUI:
         ttk.Radiobutton(frm, text="월", variable=self.date_type, value="month", command=self.update_date_widgets).grid(row=1, column=2, sticky="w")
         ttk.Radiobutton(frm, text="전체", variable=self.date_type, value="all", command=self.update_date_widgets).grid(row=1, column=3, sticky="w")
 
-        # 날짜 선택 위젯
-        self.date_entry = DateEntry(frm, width=12, textvariable=self.selected_date, date_pattern='y-mm-dd', locale='en_US')
+        # 날짜 선택 위젯 (ttkbootstrap DateEntry)
+        self.date_entry = DateEntry(frm, width=12, bootstyle="info")
         self.date_entry.grid(row=2, column=1, sticky="w")
-        # 캘린더 팝업이 바로 닫히는 현상 방지: 팝업이 닫히면 다시 열기 시도 (macOS 등에서만 적용)
-        def reopen_calendar(event):
-            try:
-                # 팝업이 닫히는 경우, 다시 열기
-                self.date_entry.after(100, lambda: self.date_entry.event_generate('<Button-1>'))
-            except Exception:
-                pass
-        self.date_entry.bind('<FocusOut>', reopen_calendar, add='+')
+        # DateEntry는 get() 대신 entry.get() 사용, 날짜 선택 시 selected_date에 값 저장
+        def update_selected_date(event=None):
+            self.selected_date.set(self.date_entry.entry.get())
+        self.date_entry.entry.bind('<FocusOut>', update_selected_date)
+        self.date_entry.entry.bind('<Return>', update_selected_date)
+        self.date_entry.entry.bind('<Tab>', update_selected_date)
+        self.date_entry.entry.bind('<Button-1>', update_selected_date)
+        # DateEntry 달력에서 날짜 선택 시에도 동기화
+        self.date_entry.bind('<<DateEntrySelected>>', update_selected_date)
         # 월 선택 위젯
         self.month_entry = ttk.Combobox(frm, width=7, textvariable=self.selected_month, values=self.get_month_list())
         self.month_entry.grid(row=2, column=2, sticky="w")
@@ -150,7 +151,14 @@ class SyncGUI:
         args.upload_only = upload_only
         args.file = self.file_list if self.file_list else None
         if self.date_type.get() == "day":
-            args.day = self.date_entry.get().replace("-", "")
+            # DateEntry는 MM/DD/YYYY 형식이므로 변환 필요
+            import datetime
+            raw = self.selected_date.get()
+            try:
+                dt = datetime.datetime.strptime(raw, "%m/%d/%Y")
+                args.day = dt.strftime("%Y%m%d")
+            except Exception:
+                args.day = raw.replace("-", "")  # fallback
         elif self.date_type.get() == "month":
             args.month = self.month_entry.get()
         elif self.date_type.get() == "all":
@@ -171,13 +179,7 @@ class SyncGUI:
             pass
 
 if __name__ == "__main__":
-    try:
-        from tkcalendar import DateEntry
-    except ImportError:
-        import sys
-        sys.exit("tkcalendar 패키지가 필요합니다. 설치: pip install tkcalendar")
-    root = tk.Tk()
-    style = ttk.Style(root)
-    style.theme_use('clam')  # 또는 'default', 'alt', 'classic' 등
+    import ttkbootstrap as tb
+    root = tb.Window(themename="flatly")  # modern theme
     app = SyncGUI(root)
     root.mainloop()
