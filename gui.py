@@ -287,5 +287,12 @@ class SyncGUI:
 if __name__ == "__main__":
     import ttkbootstrap as tb
     root = tb.Window(themename="flatly")  # modern theme
+    # 아이콘 설정
+    try:
+        icon_path = resource_path("icon.png")
+        icon_img = tk.PhotoImage(file=icon_path)
+        root.iconphoto(True, icon_img)
+    except Exception as e:
+        print("아이콘 로드 실패:", e)
     app = SyncGUI(root)
     root.mainloop()
