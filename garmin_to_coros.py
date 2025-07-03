@@ -1,3 +1,11 @@
+def parse_day(day_str):
+    # 지원: 20250703, 2025-07-03
+    if not day_str:
+        return None
+    try:
+        return datetime.strptime(day_str, "%Y%m%d").date()
+    except ValueError:
+        return datetime.strptime(day_str, "%Y-%m-%d").date()
 from enum import Enum, auto
 import os
 import requests
@@ -107,24 +115,46 @@ class GarminToCoros:
         self.GARMIN_PASSWORD = self.config.get('GARMIN_PASSWORD', '')
         self.ROOT_DIR = output_dir if output_dir else self.config.get('OUTPUT_DIR', './exports')
         self.OUTPUT_DIR = os.path.join(self.ROOT_DIR, "garmin")
+        self.garmin = None  # 로그인된 Garmin 객체
+        self.coros_token = None  # 로그인된 COROS 토큰
 
-    def run(self, args):
-        # COROS 로그인
+    def garmin_login(self, username, password):
+        if self.garmin is not None:
+            print("🔑 이미 가민 로그인됨")
+            return self.garmin
         try:
-            token = coros_login(self.COROS_EMAIL, self.COROS_PASSWORD)
+            garmin = Garmin(username, password)
+            garmin.login()
+            print("🔑 가민 로그인 성공")
+            self.garmin = garmin
+            return garmin
+        except Exception as e:
+            print(f"⛔ 가민 로그인 실패: {e}")
+            self.garmin = None
+            return None
+
+    def coros_login(self, email, password):
+        if self.coros_token is not None:
+            print("🔑 이미 COROS 로그인됨")
+            return self.coros_token
+        try:
+            token = coros_login(email, password)
             print("🔑 COROS 로그인 성공")
+            self.coros_token = token
+            return token
         except Exception as e:
             print(f"⛔ COROS 로그인 실패: {e}")
-            return
+            self.coros_token = None
+            return None
 
-        # 업로드만 옵션 (파일 직접 지정 또는 upload_only)
-        if args.file:
-            fit_files = args.file
-            print(f"🚀 {len(fit_files)}개 FIT 파일을 선택 업로드합니다.")
-            self._upload_files(token, fit_files)
-            return
-        elif getattr(args, 'upload_only', False):
-            fit_files = [
+    def run(self, args):
+        # 업로드만: 코로스만 로그인
+        if args.file or getattr(args, 'upload_only', False):
+            token = self.coros_login(self.COROS_EMAIL, self.COROS_PASSWORD)
+            if not token:
+                print("⛔ COROS 로그인 실패. 프로그램 종료.")
+                return
+            fit_files = args.file if args.file else [
                 os.path.join(self.OUTPUT_DIR, f)
                 for f in os.listdir(self.OUTPUT_DIR)
                 if f.endswith(".fit")
@@ -132,17 +162,21 @@ class GarminToCoros:
             print(f"🚀 {len(fit_files)}개 FIT 파일을 COROS에 업로드합니다.")
             self._upload_files(token, fit_files)
             return
-        # 다운로드만 옵션
+        # 다운로드만: 가민만 로그인
         elif getattr(args, 'download_only', False):
-            garmin = garmin_login(self.GARMIN_USERNAME, self.GARMIN_PASSWORD)
+            garmin = self.garmin_login(self.GARMIN_USERNAME, self.GARMIN_PASSWORD)
             if not garmin:
                 print("⛔ 가민 로그인 실패. 프로그램 종료.")
                 return
             fit_files = self._download_files(garmin, args)
-            return  # 여기서 반드시 return해서 업로드가 실행되지 않도록!
-        # 다운로드+업로드 (기본)
+            return
+        # 다운로드+업로드: 둘 다 로그인
         else:
-            garmin = garmin_login(self.GARMIN_USERNAME, self.GARMIN_PASSWORD)
+            token = self.coros_login(self.COROS_EMAIL, self.COROS_PASSWORD)
+            if not token:
+                print("⛔ COROS 로그인 실패. 프로그램 종료.")
+                return
+            garmin = self.garmin_login(self.GARMIN_USERNAME, self.GARMIN_PASSWORD)
             if not garmin:
                 print("⛔ 가민 로그인 실패. 프로그램 종료.")
                 return
@@ -152,7 +186,7 @@ class GarminToCoros:
     def _download_files(self, garmin, args):
         # 연동 옵션 처리
         if args.day:
-            start_date = end_date = datetime.strptime(args.day, "%Y%m%d").date()
+            start_date = end_date = parse_day(args.day)
             print(f"📅 일자 연동: {args.day}")
         elif args.month:
             year = int(args.month[:4])

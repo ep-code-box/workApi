@@ -1,3 +1,11 @@
+def parse_day(day_str):
+    # 지원: 20250703, 2025-07-03
+    if not day_str:
+        return None
+    try:
+        return datetime.strptime(day_str, "%Y%m%d").date()
+    except ValueError:
+        return datetime.strptime(day_str, "%Y-%m-%d").date()
 from config import load_config
 
 import os
@@ -109,15 +117,35 @@ class CorosToGarmin:
         self.GARMIN_PASSWORD = self.config.get('GARMIN_PASSWORD', '')
         self.ROOT_DIR = output_dir if output_dir else self.config.get('OUTPUT_DIR', './exports')
         self.OUTPUT_DIR = os.path.join(self.ROOT_DIR, "coros")
+        self.garmin = None  # 로그인된 Garmin 객체
+        self.coros_token = None  # 로그인된 COROS 토큰
 
     def garmin_login(self, username, password):
+        if self.garmin is not None:
+            print("🔑 이미 가민 로그인됨")
+            return self.garmin
         try:
             garmin = Garmin(username, password)
             garmin.login()
-            print("가민 로그인 성공")
+            print("🔑 가민 로그인 성공")
+            self.garmin = garmin
             return garmin
         except Exception as e:
-            print(f"가민 로그인 실패: {e}")
+            print(f"⛔ 가민 로그인 실패: {e}")
+            self.garmin = None
+            return None
+    def coros_login(self, email, password):
+        if self.coros_token is not None:
+            print("🔑 이미 COROS 로그인됨")
+            return self.coros_token
+        try:
+            token = coros_login(email, password)
+            print("🔑 COROS 로그인 성공")
+            self.coros_token = token
+            return token
+        except Exception as e:
+            print(f"⛔ COROS 로그인 실패: {e}")
+            self.coros_token = None
             return None
 
     def upload_to_garmin(self, file_path, garmin):
@@ -130,30 +158,13 @@ class CorosToGarmin:
             return (file_path, str(e))  # 실패
 
     def run(self, args):
-        # COROS 로그인
-        token = None
-        if not getattr(args, 'upload_only', False) and not getattr(args, 'file', None):
-            try:
-                token = coros_login(self.COROS_EMAIL, self.COROS_PASSWORD)
-                print("🔑 COROS 로그인 성공")
-            except Exception as e:
-                print(f"⛔ COROS 로그인 실패: {e}")
+        # 업로드만: 가민만 로그인
+        if getattr(args, 'upload_only', False) or getattr(args, 'file', None):
+            garmin = self.garmin_login(self.GARMIN_USERNAME, self.GARMIN_PASSWORD)
+            if not garmin:
+                print("⛔ 가민 로그인 실패. 프로그램 종료.")
                 return
-
-        # 가민 로그인
-        garmin = self.garmin_login(self.GARMIN_USERNAME, self.GARMIN_PASSWORD)
-        if not garmin:
-            print("⛔ 가민 로그인 실패. 프로그램 종료.")
-            return
-
-        # 업로드만 옵션 (파일 직접 지정 또는 upload_only)
-        if getattr(args, 'file', None):
-            fit_files = args.file
-            print(f"🚀 {len(fit_files)}개 FIT 파일을 선택 업로드합니다.")
-            self._upload_files(garmin, fit_files)
-            return
-        elif getattr(args, 'upload_only', False):
-            fit_files = [
+            fit_files = args.file if getattr(args, 'file', None) else [
                 os.path.join(self.OUTPUT_DIR, f)
                 for f in os.listdir(self.OUTPUT_DIR)
                 if f.endswith(".fit")
@@ -161,33 +172,37 @@ class CorosToGarmin:
             print(f"🚀 {len(fit_files)}개 FIT 파일을 가민에 업로드합니다.")
             self._upload_files(garmin, fit_files)
             return
-        # 다운로드만 옵션
+        # 다운로드만: 코로스만 로그인
         elif getattr(args, 'download_only', False):
+            token = self.coros_login(self.COROS_EMAIL, self.COROS_PASSWORD)
             if not token:
-                try:
-                    token = coros_login(self.COROS_EMAIL, self.COROS_PASSWORD)
-                    print("🔑 COROS 로그인 성공")
-                except Exception as e:
-                    print(f"⛔ COROS 로그인 실패: {e}")
-                    return
+                print("⛔ COROS 로그인 실패. 프로그램 종료.")
+                return
             fit_files = self._download_files(token, args)
-            return  # 여기서 반드시 return해서 업로드가 실행되지 않도록!
-        # 다운로드+업로드 (기본)
+            return
+        # 다운로드+업로드: 둘 다 로그인
         else:
+            token = self.coros_login(self.COROS_EMAIL, self.COROS_PASSWORD)
             if not token:
-                try:
-                    token = coros_login(self.COROS_EMAIL, self.COROS_PASSWORD)
-                    print("🔑 COROS 로그인 성공")
-                except Exception as e:
-                    print(f"⛔ COROS 로그인 실패: {e}")
-                    return
+                print("⛔ COROS 로그인 실패. 프로그램 종료.")
+                return
+            garmin = self.garmin_login(self.GARMIN_USERNAME, self.GARMIN_PASSWORD)
+            if not garmin:
+                print("⛔ 가민 로그인 실패. 프로그램 종료.")
+                return
             fit_files = self._download_files(token, args)
             self._upload_files(garmin, fit_files)
 
     def _download_files(self, token, args):
         if args.day:
-            print(f"📅 일자 연동: {args.day}")
-            activities = coros_get_activities(token, args.day, args.day)
+            # day 파라미터가 YYYY-MM-DD 또는 YYYYMMDD 모두 지원
+            day_str = args.day
+            if '-' in day_str:
+                day_fmt = day_str.replace('-', '')
+            else:
+                day_fmt = day_str
+            print(f"📅 일자 연동: {day_fmt}")
+            activities = coros_get_activities(token, day_fmt, day_fmt)
         elif args.month:
             print(f"🗓️ 월별 연동: {args.month}")
             activities = coros_get_month_activities(token, args.month)
