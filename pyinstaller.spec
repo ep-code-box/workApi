@@ -7,16 +7,29 @@ import sys
 import os
 from PyInstaller.utils.hooks import collect_submodules
 
-# 외부 모듈 자동 포함 (ttkbootstrap 등)
-hiddenimports = collect_submodules('ttkbootstrap')
-
-# 데이터 파일(설정, 예시, exports 폴더) 포함
-# (exports 폴더는 빈 폴더로는 포함 안되므로 최소 1개 더미파일 필요)
+# 데이터 파일(설정, 예시 등) 포함
 datas = [
     ('config.py', '.'),
     ('config.py.example', '.'),
-    ('README.md', '.'),
+    ('main.py', '.'),
+    ('coros_to_garmin.py', '.'),
+    ('garmin_to_coros.py', '.'),
+    ('icon.png', '.'),
 ]
+
+# 주요 다운로드 필요 외부 패키지 (requirements.txt에 반드시 포함되어야 함)
+# - requests
+# - garminconnect
+# - ttkbootstrap
+# - tkcalendar
+# - (필요시) gooey
+
+# spec에서 누락 방지용 hiddenimports (동적 import 등)
+hiddenimports = (
+    collect_submodules('ttkbootstrap') +
+    collect_submodules('tkcalendar') +
+    collect_submodules('garminconnect')
+)
 
 # 경로 처리: 실행파일/스크립트 위치 기준으로 상대경로 처리
 # (main.py, gui.py 등에서 아래 함수 사용 권장)
@@ -29,6 +42,7 @@ def resource_path(relative_path):
     return os.path.join(base_path, relative_path)
 
 # 빌드 대상: gui.py (windowed)
+icon_file = 'icon.png'
 a = Analysis([
     'gui.py',
 ],
@@ -54,7 +68,8 @@ exe = EXE(
     bootloader_ignore_signals=False,
     strip=False,
     upx=True,
-    console=False,  # GUI only
+    console=True,  # 콘솔로 에러 메시지 확인
+    icon=icon_file,
 )
 coll = COLLECT(
     exe,
