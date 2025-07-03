@@ -62,13 +62,25 @@ class ConfigDialog(tk.Toplevel):
         self.garmin_password.set(get_val('GARMIN_PASSWORD'))
         self.output_dir.set(get_val_dir('OUTPUT_DIR'))
     def save(self):
-        # config.py가 없으면 새로 생성
+        # config.py가 이미 있으면 함수 부분은 유지, 계정 정보만 갱신
+        func_code = ""
+        if os.path.exists(self.config_path):
+            with open(self.config_path, encoding="utf-8") as f:
+                text = f.read()
+            import re
+            m = re.search(r'(def load_config\s*\(.*?\):[\s\S]*)', text)
+            if m:
+                func_code = '\n' + m.group(1)
+        if not func_code:
+            # load_config 함수가 없으면 기본 함수 추가
+            func_code = '''\ndef load_config(config_path="config.py"):\n    import re, os\n    config = {{}}\n    if not os.path.exists(config_path):\n        return config\n    with open(config_path, encoding="utf-8") as f:\n        text = f.read()\n    def get_val(key):\n        m = re.search(rf'{key}\\s*=\\s*[\"\\\"](.*?)[\"\\\"]', text)\n        return m.group(1) if m else ""\n    def get_val_dir(key):\n        m = re.search(rf'{key}\\s*=\\s*[\"\\']?(.*?)[\"\\']?$', text, re.MULTILINE)\n        return m.group(1) if m else ""\n    config['COROS_EMAIL'] = get_val('COROS_EMAIL')\n    config['COROS_PASSWORD'] = get_val('COROS_PASSWORD')\n    config['GARMIN_USERNAME'] = get_val('GARMIN_USERNAME')\n    config['GARMIN_PASSWORD'] = get_val('GARMIN_PASSWORD')\n    config['OUTPUT_DIR'] = get_val_dir('OUTPUT_DIR')\n    return config\n'''
         with open(self.config_path, "w", encoding="utf-8") as f:
             f.write(f'COROS_EMAIL     = "{self.coros_email.get()}"\n')
             f.write(f'COROS_PASSWORD  = "{self.coros_password.get()}"\n')
             f.write(f'GARMIN_USERNAME = "{self.garmin_username.get()}"\n')
             f.write(f'GARMIN_PASSWORD = "{self.garmin_password.get()}"\n')
             f.write(f'OUTPUT_DIR = "{self.output_dir.get()}"\n')
+            f.write(func_code)
         tk.messagebox.showinfo("저장 완료", "설정이 저장되었습니다.")
 
 class SyncGUI:
@@ -231,13 +243,9 @@ class SyncGUI:
             if args.mode == "coros2garmin":
                 CorosToGarmin().run(args)
                 self.append_log("[COROS→Garmin 완료]", tag="success")
+            elif args.mode == "garmin2coros":
                 GarminToCoros().run(args)
                 self.append_log("[Garmin→COROS 완료]", tag="success")
-            else:
-                GarminToCoros().run(args)
-                self.append_log("[Garmin→COROS 완료]", tag="success")
-                CorosToGarmin().run(args)
-                self.append_log("[COROS→Garmin 완료]", tag="success")
             self.append_log("[다운로드+업로드 전체 완료]", tag="success")
         except Exception as e:
             self.append_log(f"[다운로드+업로드 오류] {e}", tag="error")
@@ -265,12 +273,6 @@ class SyncGUI:
         elif self.date_type.get() == "all":
             args.all = True
         return args
-
-    def append_log(self, msg):
-        self.log_box.config(state="normal")
-        self.log_box.insert(tk.END, msg + "\n")
-        self.log_box.see(tk.END)
-        self.log_box.config(state="disabled")
 
     def on_dateentry_click(self, event):
         # DateEntry 팝업이 너무 빨리 닫히는 현상 방지용
