@@ -316,7 +316,7 @@ class SyncGUI:
                 args.day = date_obj.strftime("%Y%m%d")
             except Exception:
                 raw = self.selected_date.get()
-                args.day = raw.replace("-", "")  # fallback
+                args.day = str(raw).replace("-", "").replace("/", "")  # fallback: 항상 문자열 yyyymmdd
         elif self.date_type.get() == "month":
             args.month = self.month_entry.get()
         elif self.date_type.get() == "all":

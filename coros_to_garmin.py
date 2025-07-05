@@ -43,7 +43,16 @@ def coros_get_activities(token, start_day, end_day):
     }
     url = f"https://teamapi.coros.com/activity/query?size=50&pageNumber=1&startDay={start_day}&endDay={end_day}&modeList="
     res = requests.get(url, headers=headers)
-    return res.json().get("data", {}).get("dataList", [])
+    try:
+        res_json = res.json()
+    except Exception as e:
+        print(f"[ERROR] 응답 JSON 파싱 실패: {e}")
+        print(f"[DEBUG] 원본 응답: {res.text}")
+        raise
+    print(f"[DEBUG] 코로스 활동 API 응답: {res_json}")
+    data_list = res_json.get("data", {}).get("dataList", [])
+    print(f"[DEBUG] dataList 길이: {len(data_list)}")
+    return data_list
 
 def coros_get_month_activities(token, year_month):
     start_day = f"{year_month}01"
@@ -56,6 +65,7 @@ def coros_get_month_activities(token, year_month):
         end_year = year
         end_month = month + 1
     end_day = (datetime(end_year, end_month, 1) - timedelta(days=1)).strftime("%Y%m%d")
+    print(f"[DEBUG] coros_get_month_activities: start_day={start_day}, end_day={end_day}")
     return coros_get_activities(token, start_day, end_day)
 
 def coros_get_all_activities(token):
@@ -195,14 +205,16 @@ class CorosToGarmin:
 
     def _download_files(self, token, args):
         if args.day:
-            # day 파라미터가 YYYY-MM-DD 또는 YYYYMMDD 모두 지원
-            day_str = args.day
-            if '-' in day_str:
-                day_fmt = day_str.replace('-', '')
+            # day 파라미터가 YYYY-MM-DD, YYYY/MM/DD, YYYYMMDD, int 모두 지원
+            day_str = str(args.day).strip()
+            day_fmt = day_str.replace('-', '').replace('/', '')
+            print(f"[DEBUG] 달력 선택 원본: '{args.day}', strip: '{day_str}', 변환: '{day_fmt}'")
+            if len(day_fmt) == 8 and day_fmt.isdigit():
+                print(f"📅 일자 연동: {day_fmt}")
+                activities = coros_get_activities(token, day_fmt, day_fmt)
             else:
-                day_fmt = day_str
-            print(f"📅 일자 연동: {day_fmt}")
-            activities = coros_get_activities(token, day_fmt, day_fmt)
+                print(f"⛔ 잘못된 날짜 형식: {args.day}")
+                return []
         elif args.month:
             print(f"🗓️ 월별 연동: {args.month}")
             activities = coros_get_month_activities(token, args.month)
@@ -235,7 +247,7 @@ class CorosToGarmin:
                     token,
                     activity["labelId"],
                     activity["sportType"],
-                    activity["date"],
+                    str(activity["date"]).replace('-', '').replace('/', ''),
                     self.OUTPUT_DIR
                 ): activity
                 for activity in activities
