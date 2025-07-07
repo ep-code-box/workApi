@@ -17,7 +17,38 @@ import sys
 import time
 import random
 from garminconnect import Garmin
-from config import load_config
+
+# PyInstaller/로컬 환경 모두에서 동작하는 경로 반환 함수
+def resource_path(relative_path):
+    try:
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.abspath(os.path.dirname(__file__))
+    return os.path.join(base_path, relative_path)
+
+# config.py 경로를 절대 경로로 처리
+def load_config(config_path=None):
+    if config_path is None:
+        config_path = resource_path("config.py")
+    
+    import re
+    config = {}
+    if not os.path.exists(config_path):
+        return config
+    with open(config_path, encoding="utf-8") as f:
+        text = f.read()
+    def get_val(key):
+        m = re.search(rf'{key}\s*=\s*["\"](.*?)["\"]', text)
+        return m.group(1) if m else ""
+    def get_val_dir(key):
+        m = re.search(rf'{key}\s*=\s*["\']?(.*?)["\']?$', text, re.MULTILINE)
+        return m.group(1) if m else ""
+    config['COROS_EMAIL'] = get_val('COROS_EMAIL')
+    config['COROS_PASSWORD'] = get_val('COROS_PASSWORD')
+    config['GARMIN_USERNAME'] = get_val('GARMIN_USERNAME')
+    config['GARMIN_PASSWORD'] = get_val('GARMIN_PASSWORD')
+    config['OUTPUT_DIR'] = get_val_dir('OUTPUT_DIR')
+    return config
 
 def coros_login(email, password):
     md5_pwd = hashlib.md5(password.encode('utf-8')).hexdigest()
