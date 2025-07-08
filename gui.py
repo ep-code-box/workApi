@@ -250,6 +250,10 @@ class SyncGUI:
     def run_action(self):
         mode = self.action_mode.get()
         self.log_box.config(state="normal"); self.log_box.delete(1.0, tk.END); self.log_box.config(state="disabled")
+        
+        # 실행 조건 정보를 로그에 출력
+        self.log_execution_info()
+        
         if mode == "download":
             args = self.build_args(download_only=True)
             args.download_only = True
@@ -264,6 +268,64 @@ class SyncGUI:
             args = self.build_args()
             self.append_log("[다운로드+업로드 시작]", tag="success")
             threading.Thread(target=self._run_both, args=(args,)).start()
+
+    def log_execution_info(self):
+        """실행 조건 정보를 로그에 출력"""
+        # 모드 정보
+        mode_text = "COROS → Garmin" if self.mode.get() == "coros2garmin" else "Garmin → COROS"
+        
+        # 실행 모드 정보
+        action_mode = self.action_mode.get()
+        if action_mode == "download":
+            action_text = "다운로드만"
+        elif action_mode == "upload":
+            action_text = "업로드만"
+        else:
+            action_text = "다운로드+업로드"
+        
+        # 범위 정보
+        date_type = self.date_type.get()
+        if action_mode == "upload":
+            # 업로드 모드일 때는 파일 정보
+            if self.file_list:
+                range_text = f"선택된 파일 {len(self.file_list)}개"
+            else:
+                range_text = "파일 선택 안함"
+        elif date_type == "day":
+            try:
+                date_obj = self.date_entry.get_date()
+                range_text = f"{date_obj.strftime('%Y년 %m월 %d일')}"
+            except Exception:
+                raw = self.selected_date.get()
+                if not raw or raw.strip() == "":
+                    # 날짜가 선택되지 않았을 때 어제 날짜를 기본값으로 사용
+                    from datetime import datetime, timedelta
+                    yesterday = datetime.now() - timedelta(days=1)
+                    range_text = f"{yesterday.strftime('%Y년 %m월 %d일')} (기본값: 어제)"
+                else:
+                    range_text = f"날짜: {raw}"
+        elif date_type == "month":
+            month_val = self.month_entry.get()
+            if month_val and len(month_val) == 6:
+                year = month_val[:4]
+                month = month_val[4:]
+                range_text = f"{year}년 {month}월 전체"
+            elif not month_val or month_val.strip() == "":
+                # 월이 선택되지 않았을 때 현재 월을 기본값으로 사용
+                from datetime import datetime
+                current_month = datetime.now()
+                range_text = f"{current_month.strftime('%Y년 %m월')} 전체 (기본값: 이번 달)"
+            else:
+                range_text = f"월: {month_val}"
+        elif date_type == "all":
+            range_text = "전체 기간"
+        else:
+            range_text = "범위 미설정"
+        
+        # 실행 정보 로그 출력
+        self.append_log("=" * 50)
+        self.append_log(f"📋 실행 조건: {mode_text}, {action_text}, {range_text}")
+        self.append_log("=" * 50)
 
     def _run_download(self, args):
         self.append_log("[다운로드 진행 중...]")
@@ -318,26 +380,42 @@ class SyncGUI:
                 raw = self.selected_date.get()
                 print(f"[DEBUG] DateEntry get_date() 실패: {e}")
                 print(f"[DEBUG] selected_date.get() 원본: '{raw}'")
-                # 날짜 형식 변환: mmddyyyy -> yyyymmdd
-                date_str = str(raw).replace("-", "").replace("/", "")
-                print(f"[DEBUG] 구분자 제거 후: '{date_str}'")
-                if len(date_str) == 8 and date_str.isdigit():
-                    # mmddyyyy 형식인지 확인 (월이 01-12, 일이 01-31 범위)
-                    mm = date_str[:2]
-                    dd = date_str[2:4] 
-                    yyyy = date_str[4:]
-                    print(f"[DEBUG] 파싱 결과: mm={mm}, dd={dd}, yyyy={yyyy}")
-                    if 1 <= int(mm) <= 12 and 1 <= int(dd) <= 31:
-                        args.day = yyyy + mm + dd  # yyyymmdd 형식으로 변환
-                        print(f"[DEBUG] mmddyyyy -> yyyymmdd 변환: '{date_str}' -> '{args.day}'")
-                    else:
-                        args.day = date_str  # 이미 yyyymmdd 형식으로 가정
-                        print(f"[DEBUG] 유효하지 않은 날짜, 그대로 사용: '{args.day}'")
+                
+                # 날짜가 비어있거나 공백인 경우 어제 날짜를 기본값으로 사용
+                if not raw or raw.strip() == "":
+                    from datetime import datetime, timedelta
+                    yesterday = datetime.now() - timedelta(days=1)
+                    args.day = yesterday.strftime("%Y%m%d")
+                    print(f"[DEBUG] 빈 날짜, 어제 날짜로 설정: '{args.day}'")
                 else:
-                    args.day = date_str  # fallback: 그대로 사용
-                    print(f"[DEBUG] 8자리 숫자가 아님, 그대로 사용: '{args.day}'")
+                    # 날짜 형식 변환: mmddyyyy -> yyyymmdd
+                    date_str = str(raw).replace("-", "").replace("/", "")
+                    print(f"[DEBUG] 구분자 제거 후: '{date_str}'")
+                    if len(date_str) == 8 and date_str.isdigit():
+                        # mmddyyyy 형식인지 확인 (월이 01-12, 일이 01-31 범위)
+                        mm = date_str[:2]
+                        dd = date_str[2:4] 
+                        yyyy = date_str[4:]
+                        print(f"[DEBUG] 파싱 결과: mm={mm}, dd={dd}, yyyy={yyyy}")
+                        if 1 <= int(mm) <= 12 and 1 <= int(dd) <= 31:
+                            args.day = yyyy + mm + dd  # yyyymmdd 형식으로 변환
+                            print(f"[DEBUG] mmddyyyy -> yyyymmdd 변환: '{date_str}' -> '{args.day}'")
+                        else:
+                            args.day = date_str  # 이미 yyyymmdd 형식으로 가정
+                            print(f"[DEBUG] 유효하지 않은 날짜, 그대로 사용: '{args.day}'")
+                    else:
+                        args.day = date_str  # fallback: 그대로 사용
+                        print(f"[DEBUG] 8자리 숫자가 아님, 그대로 사용: '{args.day}'")
         elif self.date_type.get() == "month":
-            args.month = self.month_entry.get()
+            month_val = self.month_entry.get()
+            if not month_val or month_val.strip() == "":
+                # 월이 선택되지 않았을 때 현재 월을 기본값으로 사용
+                from datetime import datetime
+                current_month = datetime.now()
+                args.month = current_month.strftime("%Y%m")
+                print(f"[DEBUG] 빈 월, 현재 월로 설정: '{args.month}'")
+            else:
+                args.month = month_val
         elif self.date_type.get() == "all":
             args.all = True
         return args
