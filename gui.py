@@ -314,9 +314,28 @@ class SyncGUI:
             try:
                 date_obj = self.date_entry.get_date()
                 args.day = date_obj.strftime("%Y%m%d")
-            except Exception:
+            except Exception as e:
                 raw = self.selected_date.get()
-                args.day = str(raw).replace("-", "").replace("/", "")  # fallback: 항상 문자열 yyyymmdd
+                print(f"[DEBUG] DateEntry get_date() 실패: {e}")
+                print(f"[DEBUG] selected_date.get() 원본: '{raw}'")
+                # 날짜 형식 변환: mmddyyyy -> yyyymmdd
+                date_str = str(raw).replace("-", "").replace("/", "")
+                print(f"[DEBUG] 구분자 제거 후: '{date_str}'")
+                if len(date_str) == 8 and date_str.isdigit():
+                    # mmddyyyy 형식인지 확인 (월이 01-12, 일이 01-31 범위)
+                    mm = date_str[:2]
+                    dd = date_str[2:4] 
+                    yyyy = date_str[4:]
+                    print(f"[DEBUG] 파싱 결과: mm={mm}, dd={dd}, yyyy={yyyy}")
+                    if 1 <= int(mm) <= 12 and 1 <= int(dd) <= 31:
+                        args.day = yyyy + mm + dd  # yyyymmdd 형식으로 변환
+                        print(f"[DEBUG] mmddyyyy -> yyyymmdd 변환: '{date_str}' -> '{args.day}'")
+                    else:
+                        args.day = date_str  # 이미 yyyymmdd 형식으로 가정
+                        print(f"[DEBUG] 유효하지 않은 날짜, 그대로 사용: '{args.day}'")
+                else:
+                    args.day = date_str  # fallback: 그대로 사용
+                    print(f"[DEBUG] 8자리 숫자가 아님, 그대로 사용: '{args.day}'")
         elif self.date_type.get() == "month":
             args.month = self.month_entry.get()
         elif self.date_type.get() == "all":
