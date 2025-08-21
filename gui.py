@@ -6,6 +6,7 @@ import os
 import sys
 from datetime import datetime, timedelta
 import ttkbootstrap as tb
+from PIL import Image, ImageTk # Added this line
 
 # Refactored imports
 from utils import resource_path, load_config
@@ -106,6 +107,20 @@ class SyncGUI:
             messagebox.showinfo("설정 필요", "최초 실행 시 [설정] 버튼을 눌러 계정 정보를 입력하세요.")
 
         self.create_widgets()
+
+        # Load and set the application icon
+        icon_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'icon.png')
+        try:
+            # Open the image using Pillow
+            img = Image.open(icon_path)
+            # Convert the image to a Tkinter-compatible format
+            self.tk_icon = ImageTk.PhotoImage(img)
+            # Set the icon
+            self.root.iconphoto(False, self.tk_icon)
+        except Exception as e:
+            print(f"Error loading icon: {e}")
+            # Optionally, set a default icon or handle the error gracefully
+            pass # Continue without an icon if loading fails
 
     def create_widgets(self):
         self.frm = ttk.Frame(self.root, padding=10)
